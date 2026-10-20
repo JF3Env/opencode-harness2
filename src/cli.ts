@@ -26,7 +26,7 @@ const python = absoluteInterpreter(values.python ?? "python3", packageRoot)
 const invokedDirectly = process.argv[1] !== undefined && resolve(process.argv[1]) === fileURLToPath(import.meta.url)
 
 export function installationSource(entry: string, python: string) {
-  return `// Managed by opencode-harness2. Remove this directory to disable the plugin.\nimport plugin from ${JSON.stringify(entry)}\nexport default { ...plugin, setup(ctx) { return plugin.setup({ ...ctx, options: { ...ctx.options, python: ${JSON.stringify(python)} } }) } }\n`
+  return `// Managed by opencode-harness2. Remove this directory to disable the plugin.\nimport plugin from ${JSON.stringify(entry)}\nexport default { ...plugin, setup(ctx) { return plugin.setup({ ...ctx, options: { ...ctx.options, python: ${JSON.stringify(python)}, maxDurationMs: 1_800_000 } }) } }\n`
 }
 
 if (invokedDirectly) try {

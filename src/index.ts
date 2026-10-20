@@ -30,7 +30,7 @@ export default Plugin.define({
     const memory = new MemoryStore(storageRoot)
     const controller = new Controller(ctx.session, memory, repository, python, {
       sessions: typeof ctx.options.maxSessions === "number" ? ctx.options.maxSessions : 12,
-      wallMs: typeof ctx.options.maxDurationMs === "number" ? ctx.options.maxDurationMs : 900_000,
+      wallMs: typeof ctx.options.maxDurationMs === "number" ? ctx.options.maxDurationMs : 1_800_000,
     })
     const key = await controller.key()
     const owner = async (sessionID: string) => {

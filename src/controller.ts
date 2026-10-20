@@ -27,7 +27,7 @@ export class Controller {
   private cachedKey?: string
   constructor(
     api: SessionAPI, memory: MemoryStore, repository: string, python: string,
-    limits = { sessions: 12, wallMs: 900_000 },
+    limits = { sessions: 12, wallMs: 1_800_000 },
   ) {
     if (!Number.isInteger(limits.sessions) || limits.sessions < 1 || limits.sessions > 64
       || !Number.isInteger(limits.wallMs) || limits.wallMs < 1 || limits.wallMs > 3_600_000) throw new Error("Invalid run limits.")
