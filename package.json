@@ -1,0 +1,39 @@
+{
+  "name": "opencode-harness2",
+  "version": "0.1.0-dev.0",
+  "private": true,
+  "description": "An OpenCode 2 plugin foundation for a Harness² integration.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/JF3Env/opencode-harness2.git"
+  },
+  "engines": {
+    "node": ">=22.18.0"
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./client": "./src/client.ts"
+  },
+  "files": [
+    "src",
+    "docs",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "node --experimental-strip-types --test --test-reporter=tap tests/*.test.ts",
+    "check": "npm run typecheck && npm test",
+    "doctor": "node --experimental-strip-types src/doctor.ts"
+  },
+  "dependencies": {
+    "@opencode/client": "2.0.32",
+    "@opencode/plugin": "2.0.32"
+  },
+  "devDependencies": {
+    "@types/node": "22.19.0",
+    "typescript": "5.9.3"
+  }
+}
