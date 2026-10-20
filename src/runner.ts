@@ -43,8 +43,10 @@ export class V2Runner {
     if (!this.owner.model || !this.owner.agent) throw new Error("Select a model and an agent in the source session first.")
     const started = performance.now()
     // The worker copies the user's session selection. It does not define an agent-specific model or request override.
+    // A child session inherits its parent's directory: the host drops a requested location on OpenCode 2.0.32
+    // (measured: parent at the source repository, child asked for the run workspace, kept the repository).
+    // A worker is therefore a top-level session, and lineage stays in its metadata.
     const worker = await this.api.create({
-      parentID: this.owner.id,
       model: this.owner.model,
       agent: this.owner.agent,
       title: `Harness² ${request.label}`,
@@ -58,6 +60,11 @@ export class V2Runner {
     try {
       signal.throwIfAborted()
       const selected = await this.api.get({ sessionID: worker.id }, { signal })
+      // Fail before the first prompt: a worker outside its workspace changes the source repository,
+      // and the adopted diff stays empty because the diff is read from the workspace copy.
+      if (selected.location.directory !== request.directory) {
+        throw new Error(`The host placed the worker in ${selected.location.directory} instead of ${request.directory}.`)
+      }
       if (selected.model?.id !== this.owner.model.id || selected.model?.providerID !== this.owner.model.providerID
         || selected.model?.variant !== this.owner.model.variant || selected.agent !== this.owner.agent) {
         throw new Error("The worker did not retain the source session selection.")

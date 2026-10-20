@@ -32,7 +32,9 @@ export function fakeAPI(source: SessionInfo, work?: (session: SessionInfo, text:
   const api: SessionAPI = {
     async create(input) {
       created.push(input!)
-      const session: SessionInfo = { ...source, id: `ses_worker_${created.length}`, location: input!.location!,
+      // Measured on OpenCode 2.0.32: a child session keeps the parent's directory and drops the requested one.
+      const inherited = input!.parentID ? sessions.get(input!.parentID)?.location : undefined
+      const session: SessionInfo = { ...source, id: `ses_worker_${created.length}`, location: inherited ?? input!.location!,
         metadata: input!.metadata ?? {}, permissions: [...(input!.permissions ?? [])],
         model: input!.model!, agent: input!.agent! }
       sessions.set(session.id, session)

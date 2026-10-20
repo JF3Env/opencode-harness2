@@ -67,6 +67,16 @@ Projects stay disabled until an explicit opt-in. Remove the installation with `n
 - Require project opt-in before future task execution or memory injection.
 - Test candidates against copies of the same project snapshot.
 - Never treat a Git worktree as a network or process sandbox.
+
+A worker session must own its directory. OpenCode 2.0.32 gives a child session its parent's directory
+and drops the requested location, so the runner creates a worker as a top-level session and reads the
+location back before the first prompt. A location that is not the requested workspace raises instead of
+prompting: a worker placed in the caller's project edits the checkout that started the cycle while the
+adopted diff stays empty. `tests/runner.test.ts` reproduces the host rule and checks both directions.
+
+A checkout may seed the auxiliary harness in `harness2/systemprompt.md` and `harness2/skills/*/SKILL.md`.
+The cycle starts from that tree and keeps the adopted tree in its run record. A checkout without it
+starts from one generic sentence.
 - Do not rewrite mandatory instructions or expand permissions.
 - Keep private experience out of public source control.
 - Require evidence before adopting a lesson or claiming an improvement.
