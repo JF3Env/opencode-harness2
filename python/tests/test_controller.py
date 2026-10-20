@@ -19,7 +19,7 @@ class ControllerTests(unittest.TestCase):
                 controller.validate_harness({path: "not allowed"})
 
     def test_protected_changes_fail_instead_of_becoming_a_patch(self):
-        for path in ("AGENTS.md", ".opencode/opencode.json", "nested/AGENTS.md"):
+        for path in ("AGENTS.md", ".opencode/opencode.json", "nested/AGENTS.md", "harness2/systemprompt.md"):
             with self.subTest(path=path), self.assertRaises(ValueError):
                 controller.diff({path: b"original\n"}, {path: b"changed\n"})
 
@@ -45,6 +45,23 @@ class ControllerTests(unittest.TestCase):
             (root / "link").symlink_to("/outside")
             with self.assertRaises(ValueError):
                 controller.files(root)
+
+    def test_project_harness_replaces_the_one_line_seed(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            skill = root / "harness2" / "skills" / "formula-change"
+            skill.mkdir(parents=True)
+            (root / "harness2" / "systemprompt.md").write_text("Use the formula-change skill.\n", encoding="utf-8")
+            (skill / "SKILL.md").write_text("---\nname: formula-change\ndescription: Change a formula.\n---\n", encoding="utf-8")
+            tree = controller.project_harness(root)
+            self.assertIn("formula-change", tree["systemprompt.md"])
+            self.assertIn("skills/formula-change/SKILL.md", tree)
+
+    def test_missing_project_harness_keeps_the_one_line_seed(self):
+        with tempfile.TemporaryDirectory() as directory:
+            tree = controller.project_harness(Path(directory))
+            self.assertEqual(set(tree), {"systemprompt.md"})
+            self.assertIn("mandatory project instructions", tree["systemprompt.md"])
 
     def test_upstream_contract_is_available(self):
         from harness2.core.schedule import run_task

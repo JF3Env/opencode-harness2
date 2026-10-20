@@ -57,7 +57,36 @@ def files(root: Path) -> dict[str, bytes]:
 def protected(rel: str) -> bool:
     parts = rel.split("/")
     return any(part == "AGENTS.md" or part.startswith((".git", ".env", "opencode.json"))
-               or part == ".opencode" or part.endswith((".key", ".pem", ".p12", ".pfx")) for part in parts)
+               or part in (".opencode", "harness2") or part.endswith((".key", ".pem", ".p12", ".pfx")) for part in parts)
+
+
+DEFAULT_PROMPT = "Follow the task and mandatory project instructions. Check the result before delivering it.\n"
+
+
+def project_harness(repository: Path) -> dict[str, str]:
+    """Load harness2/ from the repository, or the one-line seed when that directory is absent."""
+    root = repository / "harness2"
+    prompt = root / "systemprompt.md"
+    if not prompt.exists():
+        return {"systemprompt.md": DEFAULT_PROMPT}
+    if prompt.is_symlink() or not prompt.is_file():
+        raise ValueError("The project harness system prompt must be a regular file.")
+    tree = {"systemprompt.md": prompt.read_text(encoding="utf-8")}
+    skills = root / "skills"
+    if skills.exists():
+        if skills.is_symlink() or not skills.is_dir():
+            raise ValueError("The project harness skills path must be a directory.")
+        for skill in sorted(skills.glob("*/SKILL.md")):
+            if skill.is_symlink() or skill.parent.is_symlink():
+                raise ValueError("The project harness must not contain a symbolic link.")
+            rel = f"skills/{skill.parent.name}/SKILL.md"
+            if not allowed(rel):
+                raise ValueError(f"Unsupported project skill path: {rel}")
+            tree[rel] = skill.read_text(encoding="utf-8")
+    validate_harness(tree)
+    if len(tree["systemprompt.md"]) > 8_000:
+        raise ValueError("The project systemprompt.md exceeds 8000 characters.")
+    return tree
 
 
 def snapshot(repository: Path, destination: Path) -> str:
@@ -171,7 +200,7 @@ def run(payload: dict) -> dict:
         trigger_line="- When {desc}, use the auxiliary {name} skill.\n", subagent_requires_mode=True,
         plugin_dir=None, hooks_file=None,
     )
-    base_tree = {"systemprompt.md": "Follow the task and mandatory project instructions. Check the result before delivering it.\n"}
+    base_tree = project_harness(repository)
     base_dir = tree.write_tree(surface, base_tree, root / "base")
     channel = ChannelSpec("opencode", payload["modelRef"], effort="")
     spec = BenchSpec(
