@@ -1,8 +1,8 @@
 {
   "name": "opencode-harness2",
-  "version": "0.1.0-dev.0",
+  "version": "0.1.0-dev.1",
   "private": true,
-  "description": "An OpenCode 2 plugin foundation for a Harness² integration.",
+  "description": "An experimental OpenCode 2 plugin and adapter for the upstream Harness² method.",
   "license": "Apache-2.0",
   "type": "module",
   "repository": {
@@ -13,11 +13,14 @@
     "node": ">=22.18.0"
   },
   "exports": {
-    ".": "./src/index.ts",
-    "./client": "./src/client.ts"
+    ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" },
+    "./client": { "types": "./dist/client.d.ts", "import": "./dist/client.js" }
   },
+  "bin": { "opencode-harness2": "./dist/cli.js" },
   "files": [
-    "src",
+    "dist",
+    "python/controller.py",
+    "requirements-harness2.txt",
     "docs",
     "README.md",
     "LICENSE"
@@ -25,7 +28,12 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "node --experimental-strip-types --test --test-reporter=tap tests/*.test.ts",
-    "check": "npm run typecheck && npm test",
+    "build": "tsc -p tsconfig.build.json",
+    "check": "npm run build && npm run typecheck && npm test && npm run test:python && npm run test:package",
+    "test:python": ".venv/bin/python -B -m unittest discover -s python/tests -v",
+    "test:package": "node scripts/test-package.mjs",
+    "smoke:live": "npm run build && node scripts/live-load.mjs",
+    "prepare": "npm run build",
     "doctor": "node --experimental-strip-types src/doctor.ts"
   },
   "dependencies": {

@@ -24,6 +24,6 @@ export async function checkLocalConnection(
     connected: true,
     opencodeVersion: info.version,
     modelAccess: "not_exercised",
-    harnessCycle: "not_implemented",
+    harnessCycle: "not_exercised",
   } as const
 }

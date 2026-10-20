@@ -15,12 +15,13 @@ See the [implementation plan](docs/ROADMAP.md) for milestones and acceptance cri
 
 ## Current scope
 
-- A native version 2 plugin entrypoint with a read-only `harness2_status` tool.
+- A native version 2 plugin with status, opt-in, cancel, and approval-gated memory controls.
+- An isolated OpenCode 2 session runner and a bridge to the upstream Harness² cycle.
 - A client connection check for an existing local OpenCode 2 service.
 - Offline contract tests and a continuous integration workflow.
 
-The plugin does not create sessions, call models, change prompts, or write memories.
-It does not install itself globally. The Harness² controller remains future work.
+The plugin does not install itself. A project stays disabled until explicit opt-in.
+A passing offline check does not measure a quality or speed improvement.
 
 ## Development
 
@@ -51,17 +52,14 @@ A successful connection does not prove that task execution or the Harness² cycl
 
 ## Try the plugin locally
 
-Only the status tool exists at this stage. For an explicit local trial, add this entry to a project configuration:
+OpenCode 2.0.32 discovers a plugin file under `~/.config/opencode/plugins/` for every project. A local directory in the `plugins` configuration array is recorded and is not instantiated. Install the discovery shim. The installer records an absolute interpreter path from this package, so the OpenCode service working directory does not matter:
 
-```jsonc
-{
-  "$schema": "https://opencode.ai/config.json",
-  "plugins": ["/absolute/path/to/opencode-harness2"]
-}
+```sh
+npm run build
+node dist/cli.js install --python .venv/bin/python
 ```
 
-Merge the entry with existing configuration. Do not replace unrelated settings.
-Remove that entry to disable the trial. There is no memory or task state to remove at this stage.
+Projects stay disabled until an explicit opt-in. Remove the installation with `node dist/cli.js uninstall --python .venv/bin/python`. Private experience remains in the state directory.
 
 ## Safety boundaries
 
