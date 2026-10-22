@@ -1,6 +1,7 @@
 """Check filesystem and harness boundaries without a model or OpenCode service."""
 
 import importlib.util
+import json
 from pathlib import Path
 import subprocess
 import tempfile
@@ -62,6 +63,47 @@ class ControllerTests(unittest.TestCase):
             tree = controller.project_harness(Path(directory))
             self.assertEqual(set(tree), {"systemprompt.md"})
             self.assertIn("mandatory project instructions", tree["systemprompt.md"])
+
+    def write_oracle(self, root, data):
+        (root / "harness2").mkdir(parents=True, exist_ok=True)
+        (root / "harness2" / "oracle.json").write_text(json.dumps(data), encoding="utf-8")
+
+    def test_missing_oracle_keeps_the_run_unmeasured(self):
+        with tempfile.TemporaryDirectory() as directory:
+            self.assertIsNone(controller.load_oracle(Path(directory)))
+
+    def test_oracle_refuses_escapes_unknown_keys_and_unlisted_environment(self):
+        bad = [{"checks": []},
+               {"checks": [{"name": "a", "argv": ["true"]}], "timeoutSeconds": 0},
+               {"checks": [{"name": "a", "dir": "../outside", "argv": ["true"]}]},
+               {"checks": [{"name": "a", "dir": "/tmp", "argv": ["true"]}]},
+               {"checks": [{"name": "a", "argv": ["true"], "shell": True}]},
+               {"checks": [{"name": "a", "argv": ["true"], "env": {"PATH": "/tmp"}}]},
+               {"checks": [{"name": "a", "argv": []}]},
+               {"checks": [{"name": "a", "argv": ["true"]}, {"name": "a", "argv": ["true"]}]}]
+        for data in bad:
+            with self.subTest(data=data), tempfile.TemporaryDirectory() as directory:
+                self.write_oracle(Path(directory), data)
+                with self.assertRaises(ValueError):
+                    controller.load_oracle(Path(directory))
+
+    def test_measure_counts_exit_status_and_empty_output(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            workspace = root / "workspace"
+            (workspace / "sub").mkdir(parents=True)
+            self.write_oracle(root, {"timeoutSeconds": 30, "checks": [
+                {"name": "passes", "dir": "sub", "argv": ["true"]},
+                {"name": "fails", "argv": ["false"]},
+                {"name": "quiet", "argv": ["sh", "-c", "exit 0"], "emptyOutput": True},
+                {"name": "noisy", "argv": ["sh", "-c", "echo listed.go"], "emptyOutput": True},
+                {"name": "environment", "argv": ["sh", "-c", "test \"$CGO_ENABLED\" = 0"], "env": {"CGO_ENABLED": "0"}},
+                {"name": "missing", "argv": ["no-such-command-for-harness2"]}]})
+            result = controller.measure(controller.load_oracle(root), workspace, root / "logs")
+            self.assertEqual({c["name"]: c["passed"] for c in result["checks"]},
+                             {"passes": True, "fails": False, "quiet": True, "noisy": False, "environment": True, "missing": False})
+            self.assertEqual((result["n_passed"], result["n_criteria"], result["all_pass"]), (3, 6, False))
+            self.assertIn("listed.go", (root / "logs" / "noisy.log").read_text())
 
     def test_upstream_contract_is_available(self):
         from harness2.core.schedule import run_task

@@ -89,6 +89,65 @@ def project_harness(repository: Path) -> dict[str, str]:
     return tree
 
 
+ORACLE_KEYS = {"name", "dir", "argv", "env", "emptyOutput"}
+ORACLE_ENV = {"CGO_ENABLED", "GOFLAGS"}
+
+
+def load_oracle(root: Path) -> dict | None:
+    """Read harness2/oracle.json from a snapshot, or None when the project declares no checks."""
+    path = root / "harness2" / "oracle.json"
+    if not path.exists():
+        return None
+    if path.is_symlink() or not path.is_file():
+        raise ValueError("The project oracle must be a regular file.")
+    data = json.loads(path.read_text(encoding="utf-8"))
+    checks = data.get("checks") if isinstance(data, dict) else None
+    timeout = data.get("timeoutSeconds", 600) if isinstance(data, dict) else None
+    if not isinstance(checks, list) or not 1 <= len(checks) <= 8 or type(timeout) is not int or not 1 <= timeout <= 1800:
+        raise ValueError("The project oracle needs 1 to 8 checks and timeoutSeconds between 1 and 1800.")
+    names = set()
+    for check in checks:
+        if not isinstance(check, dict) or set(check) - ORACLE_KEYS:
+            raise ValueError(f"An oracle check takes only {sorted(ORACLE_KEYS)}.")
+        name, directory, argv = check.get("name"), check.get("dir", "."), check.get("argv")
+        if not isinstance(name, str) or not re.fullmatch(r"[a-z0-9][a-z0-9_-]*", name) or name in names:
+            raise ValueError("Each oracle check needs a unique lowercase name.")
+        names.add(name)
+        if not isinstance(directory, str) or Path(directory).is_absolute() or ".." in Path(directory).parts:
+            raise ValueError(f"Oracle check {name} must run inside the workspace.")
+        if not isinstance(argv, list) or not 1 <= len(argv) <= 32 or not all(isinstance(a, str) and a for a in argv):
+            raise ValueError(f"Oracle check {name} needs an argv list of 1 to 32 strings.")
+        env = check.get("env", {})
+        if not isinstance(env, dict) or set(env) - ORACLE_ENV or not all(isinstance(v, str) for v in env.values()):
+            raise ValueError(f"Oracle check {name} may set only {sorted(ORACLE_ENV)}.")
+        if not isinstance(check.get("emptyOutput", False), bool):
+            raise ValueError(f"Oracle check {name} needs a boolean emptyOutput.")
+    return {"checks": checks, "timeoutSeconds": timeout}
+
+
+def measure(oracle: dict, workspace: Path, logs: Path) -> dict:
+    """Run every declared check in one workspace copy. A check passes on exit 0, and on empty stdout when asked."""
+    workspace = workspace.resolve(strict=True)
+    logs.mkdir(exist_ok=True)
+    results = []
+    for check in oracle["checks"]:
+        directory = (workspace / check.get("dir", ".")).resolve()
+        directory.relative_to(workspace)
+        env = {"PATH": os.environ.get("PATH", ""), "HOME": os.environ.get("HOME", ""), **check.get("env", {})}
+        try:
+            done = subprocess.run(check["argv"], cwd=directory, env=env, capture_output=True, timeout=oracle["timeoutSeconds"])
+            output, status = done.stdout + done.stderr, done.returncode
+            passed = status == 0 and not (check.get("emptyOutput") and done.stdout.strip())
+        except subprocess.TimeoutExpired as exc:
+            output, status, passed = (exc.stdout or b"") + (exc.stderr or b""), "timeout", False
+        except OSError as exc:
+            output, status, passed = str(exc).encode(), "not_started", False
+        (logs / f"{check['name']}.log").write_bytes(output[-2_000_000:])
+        results.append({"name": check["name"], "passed": passed, "exit": status})
+    count = sum(result["passed"] for result in results)
+    return {"n_passed": count, "n_criteria": len(results), "all_pass": count == len(results), "checks": results}
+
+
 def snapshot(repository: Path, destination: Path) -> str:
     if git(repository, "rev-parse", "--show-toplevel").decode().strip() != str(repository):
         raise ValueError("The source must be the canonical repository root.")
@@ -193,6 +252,7 @@ def run(payload: dict) -> dict:
     revision = snapshot(repository, baseline)
     runtime_plugin(baseline, payload["pluginEntry"])
     original = files(baseline)
+    oracle = load_oracle(baseline)
     surface = tree.SurfaceSpec(
         name="opencode", always_on=("systemprompt.md",), always_on_max=8000,
         always_on_cap_reason="Auxiliary instructions must remain bounded.", skill_dir="skills", skill_name_rule="must_match",
@@ -246,7 +306,8 @@ def run(payload: dict) -> dict:
         def trajectory(self, run_dir, *, obs_trunc): return (run_dir / "trajectory.md").read_text()
         def deliverable_files(self, run_dir): return {"answer.md": (run_dir / "answer.md").read_text(), "changes.patch": (run_dir / "changes.patch").read_text()}
         def deliverable_text(self, run_dir): return "\n\n".join(self.deliverable_files(run_dir).values())
-        def score(self, run_dir, task_id): return None
+        def score(self, run_dir, task_id):
+            return measure(oracle, Path(run_dir) / "workspace", Path(run_dir) / "oracle") if oracle else None
 
     class Editor(Proposer):
         def _opencode(self, cwd, mission, system, wall):
@@ -283,10 +344,16 @@ def run(payload: dict) -> dict:
     namespace = schedule.Namespace("repository", "oc2", payload.get("mode", "agg"), payload.get("k", 1))
     method_dir = namespace.task_dir(root / "method", "task")
     chosen_harness = tree.read_tree(surface, method_dir / "harnesses" / str(selected.get("chosen_label", ""))) if chosen else {}
+    adopted_harness = str(tree.write_tree(surface, chosen_harness, root / "adopted-harness", stubs=False)) if chosen_harness else ""
+    # The oracle measures after selection, as upstream judges do. It never feeds the choice.
+    measured = "not_measured"
+    if oracle:
+        measured = {"chosen": adapter.score(Path(chosen), "task") if chosen else None,
+                    "baseline": [adapter.score(Path(entry["run_dir"]), "task") for entry in result.base]}
     return {"status": result.status, "revision": revision, "method": "upstream-harness2", "upstreamVersion": importlib.metadata.version("harness2"),
             "selectionPolicy": "upstream-finals-only", "summary": result.to_dict(), "adopted": adopted,
-            "experience": selected.get("experience", {}), "harness": chosen_harness,
-            "baselineDirectories": [entry["run_dir"] for entry in result.base], "oracle": "not_measured"}
+            "experience": selected.get("experience", {}), "harness": chosen_harness, "adoptedHarness": adopted_harness,
+            "baselineDirectories": [entry["run_dir"] for entry in result.base], "oracle": measured}
 
 
 def main():

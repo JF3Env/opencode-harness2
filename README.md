@@ -77,6 +77,14 @@ adopted diff stays empty. `tests/runner.test.ts` reproduces the host rule and ch
 A checkout may seed the auxiliary harness in `harness2/systemprompt.md` and `harness2/skills/*/SKILL.md`.
 The cycle starts from that tree and keeps the adopted tree in its run record. A checkout without it
 starts from one generic sentence.
+
+A checkout may also declare `harness2/oracle.json`: up to eight commands, each with an argument list, a
+directory inside the workspace, and optionally `CGO_ENABLED` or `GOFLAGS`. After selection the controller
+runs them in the workspace copy of the chosen run and of each baseline run, keeps the logs under
+`oracle/` in each execution, and reports `n_passed` of `n_criteria` in `result.oracle`. The checks never
+feed selection. They run the project's own commands with the user's permissions, outside any sandbox.
+Without the file the run reports `"oracle": "not_measured"`.
+The chosen harness is also written to `<run>/adopted-harness/`, ready to replace the checkout's `harness2/`.
 - Do not rewrite mandatory instructions or expand permissions.
 - Keep private experience out of public source control.
 - Require evidence before adopting a lesson or claiming an improvement.
