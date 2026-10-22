@@ -51,6 +51,12 @@ export async function registerWorkerGuards(ctx: Plugin.Context) {
       if (event.action.startsWith("harness2.") && event.effect !== "deny") event.effect = "ask"
       return
     }
+    // A task worker loads an auxiliary skill on demand, as the method's surface declares. An editor reads them as files.
+    if (event.action === "skill") {
+      if (session.metadata?.harness2Role !== "task") event.effect = "deny"
+      else if (event.effect !== "deny") event.effect = "allow"
+      return
+    }
     if (!actions.has(event.action)) { event.effect = "deny"; return }
     if (mutations.has(event.action) && session.metadata?.harness2Role === "editor") {
       const root = session.location.directory
@@ -58,8 +64,10 @@ export async function registerWorkerGuards(ctx: Plugin.Context) {
     }
   })
   await ctx.session.hook("context", async (event) => {
-    if (!await worker(event.sessionID)) return
-    for (const name of Object.keys(event.tools)) if (!tools.has(name)) delete event.tools[name]
+    const session = await worker(event.sessionID)
+    if (!session) return
+    const task = session.metadata?.harness2Role === "task"
+    for (const name of Object.keys(event.tools)) if (!tools.has(name) && !(task && name === "skill")) delete event.tools[name]
   })
   await ctx.session.hook("title", async (event) => {
     if (await worker(event.sessionID)) event.result = "Harness² worker"
@@ -67,7 +75,9 @@ export async function registerWorkerGuards(ctx: Plugin.Context) {
   await ctx.tool.hook("execute.before", async (event) => {
     const session = await worker(event.sessionID)
     if (!session) return
-    if (!tools.has(event.tool)) throw new Error("This tool is not available to a Harness² worker.")
+    if (!tools.has(event.tool) && !(event.tool === "skill" && session.metadata?.harness2Role === "task")) {
+      throw new Error("This tool is not available to a Harness² worker.")
+    }
     if (!event.input || typeof event.input !== "object") return
     const input = event.input as Record<string, unknown>
     const root = await realpath(session.location.directory)

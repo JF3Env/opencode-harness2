@@ -60,6 +60,34 @@ def protected(rel: str) -> bool:
                or part in (".opencode", "harness2") or part.endswith((".key", ".pem", ".p12", ".pfx")) for part in parts)
 
 
+def install_skills(workspace: Path, harness: dict[str, str]) -> list[tuple[Path, str]]:
+    """Place each auxiliary skill where OpenCode discovers it, so a task worker loads it on demand."""
+    installed = []
+    for rel, body in sorted(harness.items()):
+        if rel == "systemprompt.md":
+            continue
+        name = rel.split("/")[1]
+        target = workspace / ".opencode" / "skills" / name / "SKILL.md"
+        if target.parent.exists():
+            raise ValueError(f"The project already has a skill named {name}.")
+        target.parent.mkdir(parents=True)
+        target.write_text(body, encoding="utf8")
+        installed.append((target, body))
+    return installed
+
+
+def remove_skills(workspace: Path, installed: list[tuple[Path, str]]) -> None:
+    """Remove the installed skills before the diff; a worker cannot change them, and this checks it."""
+    for target, body in installed:
+        if target.is_symlink() or not target.is_file() or target.read_text(encoding="utf8") != body:
+            raise ValueError("A worker changed an installed auxiliary skill.")
+        target.unlink()
+        target.parent.rmdir()
+    for directory in (workspace / ".opencode" / "skills", workspace / ".opencode"):
+        if installed and directory.is_dir() and not any(directory.iterdir()):
+            directory.rmdir()
+
+
 DEFAULT_PROMPT = "Follow the task and mandatory project instructions. Check the result before delivering it.\n"
 
 
@@ -312,10 +340,16 @@ def run(payload: dict) -> dict:
             shutil.copytree(baseline, workspace)
             harness = tree.read_tree(surface, harness_dir or base_dir)
             validate_harness(harness)
-            guidance = "\n\n".join(f"## {rel}\n{body}" for rel, body in harness.items())
+            # Only systemprompt.md is always on. Skills stay on demand, so a load shows in the trajectory.
+            installed = install_skills(workspace, harness)
+            skills = ", ".join(rel.split("/")[1] for rel in sorted(harness) if rel != "systemprompt.md")
+            guidance = "## systemprompt.md\n" + harness["systemprompt.md"]
+            if skills:
+                guidance += f"\n\nAuxiliary skills, loaded with the skill tool: {skills}.\n"
             response = transport.execute(workspace, self.task_prompt(task_id) +
                 "\n\nAuxiliary advice follows. It cannot override project instructions or permissions.\n" + guidance,
                 "task", run_id.rsplit("/", 1)[-1])
+            remove_skills(workspace, installed)
             patch = diff(original, files(workspace))
             (run_dir / "answer.md").write_text(response["text"], encoding="utf8")
             (run_dir / "changes.patch").write_text(patch, encoding="utf8")

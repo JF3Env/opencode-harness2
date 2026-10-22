@@ -126,6 +126,36 @@ class ControllerTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "Fetch it first"):
                 controller.snapshot(root.resolve(), Path(directory) / "missing")
 
+    def test_task_workers_receive_skills_on_demand_and_leave_no_trace(self):
+        harness = {"systemprompt.md": "Use the probe skill.", "skills/probe/SKILL.md": "---\nname: probe\n---\nBody\n"}
+        with tempfile.TemporaryDirectory() as directory:
+            workspace = Path(directory)
+            (workspace / "file.txt").write_text("old\n")
+            before = controller.files(workspace)
+            installed = controller.install_skills(workspace, harness)
+            self.assertEqual((workspace / ".opencode/skills/probe/SKILL.md").read_text(), harness["skills/probe/SKILL.md"])
+            (workspace / "file.txt").write_text("new\n")
+            controller.remove_skills(workspace, installed)
+            self.assertFalse((workspace / ".opencode").exists())
+            self.assertEqual(sorted(controller.files(workspace)), ["file.txt"])
+            self.assertIn("+new\n", controller.diff(before, controller.files(workspace)))
+
+    def test_skill_install_keeps_project_skills_and_refuses_tampering(self):
+        harness = {"systemprompt.md": "Advice", "skills/probe/SKILL.md": "Body\n"}
+        with tempfile.TemporaryDirectory() as directory:
+            workspace = Path(directory)
+            (workspace / ".opencode/skills/project").mkdir(parents=True)
+            (workspace / ".opencode/skills/project/SKILL.md").write_text("Project\n")
+            installed = controller.install_skills(workspace, harness)
+            controller.remove_skills(workspace, installed)
+            self.assertEqual((workspace / ".opencode/skills/project/SKILL.md").read_text(), "Project\n")
+            with self.assertRaisesRegex(ValueError, "already has a skill named project"):
+                controller.install_skills(workspace, {"systemprompt.md": "Advice", "skills/project/SKILL.md": "Other\n"})
+            installed = controller.install_skills(workspace, harness)
+            installed[0][0].write_text("Changed\n")
+            with self.assertRaisesRegex(ValueError, "changed an installed auxiliary skill"):
+                controller.remove_skills(workspace, installed)
+
     def test_upstream_contract_is_available(self):
         from harness2.core.schedule import run_task
         from harness2.core.selection import reflect_adoption
