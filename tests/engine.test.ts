@@ -92,8 +92,29 @@ test("simultaneous starts admit only one run and cancellation stops its worker",
   await ready
   await controller.cancel()
   assert.equal((await controller.status()).run?.status, "cancelled")
+  assert.equal((await controller.status()).run?.error, "Cancelled by the user.")
   assert.equal(fake.created.length, 1)
   assert.ok(fake.interrupted.length)
+})
+
+test("a cancellation the user did not ask for records its own reason", async () => {
+  const f = await fixture()
+  const source = owner(f.repository)
+  let begin!: () => void
+  const ready = new Promise<void>((resolve) => { begin = resolve })
+  const fake = fakeAPI(source, async (_session, _text, signal) => {
+    begin()
+    return new Promise((_resolve, reject) => signal?.addEventListener("abort", () => reject(new Error("Cancelled")), { once: true }))
+  })
+  const memory = new MemoryStore(join(f.root, "state"))
+  const controller = new Controller(fake.api, memory, f.repository, python)
+  await memory.enable(await controller.key(), true)
+  const admitted = await controller.start(source, task)
+  await ready
+  await controller.cancel("Cancelled because the OpenCode service stopped or reloaded the plugin.")
+  const record = JSON.parse(await readFile(join(admitted.directory, "run.json"), "utf8"))
+  assert.equal(record.status, "cancelled")
+  assert.equal(record.error, "Cancelled because the OpenCode service stopped or reloaded the plugin.")
 })
 
 test("approved experience reaches the next upstream improvement without automatic inheritance", async () => {

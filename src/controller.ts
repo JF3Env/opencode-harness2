@@ -123,10 +123,10 @@ export class Controller {
     return { id, directory, status: "running", limits: this.limits }
   }
 
-  async cancel() {
+  async cancel(reason = "Cancelled by the user.") {
     const job = jobs.get(await this.key())
     if (!job || job.record.status !== "running") return { cancelled: false }
-    job.abort.abort(new Error("Cancelled by the user."))
+    job.abort.abort(new Error(reason))
     await job.promise
     return { cancelled: true, id: job.record.id }
   }

@@ -66,7 +66,7 @@ if (invokedDirectly) try {
     const controller = new Controller(client.session, new MemoryStore(root), repository, python)
     const owner = await client.session.get({ sessionID: values.session })
     const admitted = await controller.start(owner, spec)
-    const stop = () => { void controller.cancel() }
+    const stop = () => { void controller.cancel("Cancelled because the pilot process received a stop signal.") }
     process.once("SIGINT", stop)
     process.once("SIGTERM", stop)
     try {
