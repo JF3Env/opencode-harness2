@@ -36,7 +36,7 @@ test("the connection check uses one authenticated read and returns only a safe s
     connected: true,
     opencodeVersion: "2.0.32",
     modelAccess: "not_exercised",
-    harnessCycle: "not_implemented",
+    harnessCycle: "not_exercised",
   })
   assert.equal(JSON.stringify(result).includes("synthetic"), false)
 })

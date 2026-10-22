@@ -15,12 +15,13 @@ See the [implementation plan](docs/ROADMAP.md) for milestones and acceptance cri
 
 ## Current scope
 
-- A native version 2 plugin entrypoint with a read-only `harness2_status` tool.
+- A native version 2 plugin with status, opt-in, cancel, and approval-gated memory controls.
+- An isolated OpenCode 2 session runner and a bridge to the upstream Harness² cycle.
 - A client connection check for an existing local OpenCode 2 service.
 - Offline contract tests and a continuous integration workflow.
 
-The plugin does not create sessions, call models, change prompts, or write memories.
-It does not install itself globally. The Harness² controller remains future work.
+The plugin does not install itself. A project stays disabled until explicit opt-in.
+A passing offline check does not measure a quality or speed improvement.
 
 ## Development
 
@@ -51,17 +52,17 @@ A successful connection does not prove that task execution or the Harness² cycl
 
 ## Try the plugin locally
 
-Only the status tool exists at this stage. For an explicit local trial, add this entry to a project configuration:
+OpenCode 2.0.32 discovers a plugin file under `~/.config/opencode/plugins/` for every project. A local directory in the `plugins` configuration array is recorded and is not instantiated. Install the discovery shim. The installer records an absolute interpreter path from this package, so the OpenCode service working directory does not matter:
 
-```jsonc
-{
-  "$schema": "https://opencode.ai/config.json",
-  "plugins": ["/absolute/path/to/opencode-harness2"]
-}
+```sh
+npm run build
+node dist/cli.js install --python .venv/bin/python
 ```
 
-Merge the entry with existing configuration. Do not replace unrelated settings.
-Remove that entry to disable the trial. There is no memory or task state to remove at this stage.
+A run stops at its deadline, 30 minutes unless `--max-duration-ms` sets another value up to two hours (7200000).
+A k=1 cycle took about 35 minutes on 2026-10-22. Pass the same option to `uninstall`.
+
+Projects stay disabled until an explicit opt-in. Remove the installation with `node dist/cli.js uninstall --python .venv/bin/python`. Private experience remains in the state directory.
 
 ## Safety boundaries
 
@@ -69,6 +70,26 @@ Remove that entry to disable the trial. There is no memory or task state to remo
 - Require project opt-in before future task execution or memory injection.
 - Test candidates against copies of the same project snapshot.
 - Never treat a Git worktree as a network or process sandbox.
+
+A worker session must own its directory. OpenCode 2.0.32 gives a child session its parent's directory
+and drops the requested location, so the runner creates a worker as a top-level session and reads the
+location back before the first prompt. A location that is not the requested workspace raises instead of
+prompting: a worker placed in the caller's project edits the checkout that started the cycle while the
+adopted diff stays empty. `tests/runner.test.ts` reproduces the host rule and checks both directions.
+
+A checkout may seed the auxiliary harness in `harness2/systemprompt.md` and `harness2/skills/*/SKILL.md`.
+The cycle starts from that tree and keeps the adopted tree in its run record. A checkout without it
+starts from one generic sentence.
+
+A checkout may also declare `harness2/oracle.json`: up to eight commands, each with an argument list, a
+directory inside the workspace, and optionally `CGO_ENABLED` or `GOFLAGS`. After selection the controller
+runs them in the workspace copy of the chosen run and of each baseline run, keeps the logs under
+`oracle/` in each execution, and reports `n_passed` of `n_criteria` in `result.oracle`. The checks never
+feed selection. They run the project's own commands with the user's permissions, outside any sandbox.
+Without the file the run reports `"oracle": "not_measured"`.
+When the file names an `integratedRef`, such as `refs/remotes/origin/main`, the snapshot refuses any
+`HEAD` other than that commit, so a cycle runs only on integrated work. The controller does not fetch.
+The chosen harness is also written to `<run>/adopted-harness/`, ready to replace the checkout's `harness2/`.
 - Do not rewrite mandatory instructions or expand permissions.
 - Keep private experience out of public source control.
 - Require evidence before adopting a lesson or claiming an improvement.

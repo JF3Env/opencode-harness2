@@ -11,9 +11,10 @@ export function statusFor(version: unknown) {
   return {
     pluginId: PLUGIN_ID,
     opencodeVersion: version,
-    stage: "foundation",
-    execution: "not_implemented",
-    improvement: "not_implemented",
-    memory: "not_implemented",
+    stage: "experimental",
+    execution: "opencode2_isolated_sessions",
+    improvement: "upstream_harness2_bridge",
+    memory: "project_scoped_approval_required",
+    empiricalValidation: "not_measured",
   } as const
 }

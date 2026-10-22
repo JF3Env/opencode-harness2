@@ -85,6 +85,7 @@ Cancellation stops scheduled work. Removing the plugin requires no change to the
 - [ ] Set the pilot task set and budget before execution.
 - [ ] Compare normal and assisted execution from the same initial snapshots.
 - [ ] Check outputs against independent completion criteria.
+  A project oracle now measures the chosen and baseline runs after selection; no pilot has used it yet.
 - [ ] Report correctness, latency, tokens, and cost when prices are available.
 - [ ] Check experience reuse on a new task, not only the task that produced it.
 - [ ] Keep failed, cancelled, and inconclusive runs visible.
