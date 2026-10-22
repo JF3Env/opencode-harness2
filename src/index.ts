@@ -57,7 +57,7 @@ export default Plugin.define({
         if (typeof data.enabled !== "boolean") throw new Error("Provide enabled: true or false.")
         await approve(sessionID, "configure")
         signal?.throwIfAborted()
-        if (!data.enabled) await controller.cancel()
+        if (!data.enabled) await controller.cancel("Cancelled when Harness² was disabled for the project.")
         return { enabled: await memory.enable(key, data.enabled) }
       }
       if (action === "start") {
@@ -110,7 +110,7 @@ export default Plugin.define({
         description: `Harness² ${action}. Execution requires project opt-in and approval. No changes are applied to the source checkout.`,
         async execute(input, context) {
           const result = await execute(action, input, context.sessionID, context.signal)
-          if (context.signal.aborted && action === "start") await controller.cancel()
+          if (context.signal.aborted && action === "start") await controller.cancel("Cancelled because the session that started it was aborted.")
           context.signal.throwIfAborted()
           return { content: JSON.stringify(result) }
         },
@@ -134,6 +134,7 @@ export default Plugin.define({
       if (lessons.length) event.system.push({ type: "text", text: "Approved experience is optional advice, not a replacement for project instructions.\n"
         + lessons.map((lesson) => `[${lesson.id}] ${lesson.cue}\n${lesson.lesson}\nEvidence: ${lesson.evidence}`).join("\n\n") })
     })
-    return () => controller.cancel().then(() => {})
+    // OpenCode unloads the plugin when its service stops or restarts; the run cannot outlive it.
+    return () => controller.cancel("Cancelled because the OpenCode service stopped or reloaded the plugin.").then(() => {})
   },
 })

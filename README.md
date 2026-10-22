@@ -61,6 +61,8 @@ node dist/cli.js install --python .venv/bin/python
 
 A run stops at its deadline, 30 minutes unless `--max-duration-ms` sets another value up to two hours (7200000).
 A k=1 cycle took about 35 minutes on 2026-10-22. Pass the same option to `uninstall`.
+A run lives in the OpenCode service. Restarting the service, or rebuilding `dist/` while it watches the files, reloads the
+plugin and cancels the run; its `run.json` then names that reason instead of a user cancellation.
 
 Projects stay disabled until an explicit opt-in. Remove the installation with `node dist/cli.js uninstall --python .venv/bin/python`. Private experience remains in the state directory.
 
