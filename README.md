@@ -81,6 +81,13 @@ A checkout may seed the auxiliary harness in `harness2/systemprompt.md` and `har
 The cycle starts from that tree and keeps the adopted tree in its run record. A checkout without it
 starts from one generic sentence.
 
+A task worker receives `systemprompt.md` in its prompt, as the always-on component. Each skill is installed
+as `.opencode/skills/<name>/SKILL.md` in the worker's workspace, and only a task worker may call the
+`skill` tool, so a skill reaches the worker on demand and each load shows in its trajectory. A skill
+named like one of the project's skills stops the run. The controller removes the installed skills before
+the diff and stops the run if a worker changed one. An editor reads the skills as files and has no
+`skill` tool.
+
 A checkout may also declare `harness2/oracle.json`: up to eight commands, each with an argument list, a
 directory inside the workspace, and optionally `CGO_ENABLED` or `GOFLAGS`. After selection the controller
 runs them in the workspace copy of the chosen run and of each baseline run, keeps the logs under

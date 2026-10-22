@@ -74,6 +74,27 @@ test("worker guards deny arbitrary tools and preserve existing denials", async (
   await assert.rejects(h.hook("tool.execute.before", { sessionID: source.id, tool: "write", input: { path: "MISSION.md" } }), /only context\/harness/)
 })
 
+test("only a task worker loads skills, and a configured denial still holds", async () => {
+  const f = await fixture()
+  const source = owner(f.repository)
+  source.metadata = { harness2Worker: true, harness2Role: "task" }
+  const h = context(source, join(f.root, "state"))
+  await plugin.setup(h.ctx)
+  const ask = await h.hook("permission.evaluate", { sessionID: source.id, action: "skill", effect: "ask", resources: ["probe"] })
+  assert.equal(ask.effect, "allow")
+  const denied = await h.hook("permission.evaluate", { sessionID: source.id, action: "skill", effect: "deny", resources: ["probe"] })
+  assert.equal(denied.effect, "deny")
+  const event = await h.hook("session.context", { sessionID: source.id, tools: { read: {}, skill: {}, shell: {} }, system: [], messages: [] })
+  assert.deepEqual(Object.keys(event.tools), ["read", "skill"])
+  await h.hook("tool.execute.before", { sessionID: source.id, tool: "skill", input: { name: "probe" } })
+  source.metadata = { harness2Worker: true, harness2Role: "editor" }
+  const editor = await h.hook("permission.evaluate", { sessionID: source.id, action: "skill", effect: "allow", resources: ["probe"] })
+  assert.equal(editor.effect, "deny")
+  const tools = await h.hook("session.context", { sessionID: source.id, tools: { read: {}, skill: {} }, system: [], messages: [] })
+  assert.deepEqual(Object.keys(tools.tools), ["read"])
+  await assert.rejects(h.hook("tool.execute.before", { sessionID: source.id, tool: "skill", input: { name: "probe" } }), /not available/)
+})
+
 test("mutating controls ask for approval without relaxing configured denials", async () => {
   const f = await fixture()
   const source = owner(f.repository)
