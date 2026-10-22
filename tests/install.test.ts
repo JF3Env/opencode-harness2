@@ -40,6 +40,22 @@ test("installation records a relative interpreter as an absolute package path", 
   await assert.rejects(access(join(config, "opencode", "plugins", "opencode-harness2", "index.ts")))
 })
 
+test("installation records a chosen run deadline and refuses one beyond two hours", async () => {
+  const f = await fixture()
+  const config = join(f.root, "config")
+  const env = { ...process.env, XDG_CONFIG_HOME: config }
+  const cli = join(process.cwd(), "dist", "cli.js")
+  const python = join(process.cwd(), ".venv", "bin", "python")
+  const file = join(config, "opencode", "plugins", "opencode-harness2", "index.ts")
+  await assert.rejects(exec(process.execPath, [cli, "install", "--python", python, "--max-duration-ms", "7200001"], { env }))
+  await assert.rejects(access(file))
+  await exec(process.execPath, [cli, "install", "--python", python, "--max-duration-ms", "7200000"], { env })
+  assert.ok((await readFile(file, "utf8")).includes("maxDurationMs: 7_200_000 "))
+  await assert.rejects(exec(process.execPath, [cli, "uninstall", "--python", python], { env }))
+  await exec(process.execPath, [cli, "uninstall", "--python", python, "--max-duration-ms", "7200000"], { env })
+  await assert.rejects(access(file))
+})
+
 test("uninstall refuses to remove an entry that the user changed", async () => {
   const f = await fixture()
   const config = join(f.root, "config")

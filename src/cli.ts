@@ -9,7 +9,7 @@ import { promisify } from "node:util"
 import { OpenCode } from "@opencode/client"
 import { Service } from "@opencode/client/service"
 import { MemoryStore } from "./state.ts"
-import { Controller, type StartInput } from "./controller.ts"
+import { Controller, MAX_WALL_MS, type StartInput } from "./controller.ts"
 import { checkLocalConnection } from "./client.ts"
 import { isOpenCode2 } from "./status.ts"
 import { validateOracle, pilotReport, type Oracle } from "./pilot.ts"
@@ -18,15 +18,17 @@ import { absoluteInterpreter, within } from "./runtime.ts"
 const exec = promisify(execFile)
 const command = process.argv[2]
 const { values } = parseArgs({ args: process.argv.slice(3), options: {
-  python: { type: "string" }, session: { type: "string" }, spec: { type: "string" }, confirm: { type: "boolean" },
+  python: { type: "string" }, "max-duration-ms": { type: "string" }, session: { type: "string" }, spec: { type: "string" }, confirm: { type: "boolean" },
 } })
 const entry = fileURLToPath(new URL("./index.js", import.meta.url))
 const packageRoot = dirname(dirname(entry))
 const python = absoluteInterpreter(values.python ?? "python3", packageRoot)
+const maxDurationMs = Number(values["max-duration-ms"] ?? 1_800_000)
 const invokedDirectly = process.argv[1] !== undefined && resolve(process.argv[1]) === fileURLToPath(import.meta.url)
 
-export function installationSource(entry: string, python: string) {
-  return `// Managed by opencode-harness2. Remove this directory to disable the plugin.\nimport plugin from ${JSON.stringify(entry)}\nexport default { ...plugin, setup(ctx) { return plugin.setup({ ...ctx, options: { ...ctx.options, python: ${JSON.stringify(python)}, maxDurationMs: 1_800_000 } }) } }\n`
+export function installationSource(entry: string, python: string, wallMs = 1_800_000) {
+  if (!Number.isInteger(wallMs) || wallMs < 1 || wallMs > MAX_WALL_MS) throw new Error(`Use --max-duration-ms between 1 and ${MAX_WALL_MS}.`)
+  return `// Managed by opencode-harness2. Remove this directory to disable the plugin.\nimport plugin from ${JSON.stringify(entry)}\nexport default { ...plugin, setup(ctx) { return plugin.setup({ ...ctx, options: { ...ctx.options, python: ${JSON.stringify(python)}, maxDurationMs: ${String(wallMs).replace(/\B(?=(\d{3})+$)/g, "_")} } }) } }\n`
 }
 
 if (invokedDirectly) try {
@@ -38,7 +40,7 @@ if (invokedDirectly) try {
     if (!isAbsolute(entry)) throw new Error("The plugin path must be absolute.")
     const directory = join(process.env.XDG_CONFIG_HOME ?? join(homedir(), ".config"), "opencode", "plugins", "opencode-harness2")
     const target = join(directory, "index.ts")
-    const source = installationSource(entry, python)
+    const source = installationSource(entry, python, maxDurationMs)
     if (command === "install") {
       await exec(python, ["-I", "-B", fileURLToPath(new URL("../python/controller.py", import.meta.url)), "--check"], { timeout: 15_000 })
       await mkdir(directory, { recursive: true, mode: 0o700 })

@@ -135,3 +135,11 @@ test("disabled projects and nested workers cannot start a controller", async () 
   await assert.rejects(controller.start({ ...source, metadata: { harness2Worker: true } }, task), /Worker sessions/)
   assert.equal(fake.created.length, 0)
 })
+
+test("a run deadline of two hours is accepted and a longer one is refused", async () => {
+  const f = await fixture()
+  const fake = fakeAPI(owner(f.repository))
+  const memory = new MemoryStore(join(f.root, "state"))
+  assert.equal(new Controller(fake.api, memory, f.repository, python, { sessions: 12, wallMs: 7_200_000 }).limits.wallMs, 7_200_000)
+  assert.throws(() => new Controller(fake.api, memory, f.repository, python, { sessions: 12, wallMs: 7_200_001 }), /Invalid run limits/)
+})

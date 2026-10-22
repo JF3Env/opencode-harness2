@@ -59,6 +59,9 @@ npm run build
 node dist/cli.js install --python .venv/bin/python
 ```
 
+A run stops at its deadline, 30 minutes unless `--max-duration-ms` sets another value up to two hours (7200000).
+A k=1 cycle took about 35 minutes on 2026-10-22. Pass the same option to `uninstall`.
+
 Projects stay disabled until an explicit opt-in. Remove the installation with `node dist/cli.js uninstall --python .venv/bin/python`. Private experience remains in the state directory.
 
 ## Safety boundaries

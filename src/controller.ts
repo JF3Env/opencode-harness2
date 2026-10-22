@@ -14,6 +14,8 @@ export type RunRecord = {
   usageIncomplete?: boolean;
   tokens: { input: number; output: number; reasoning: number }; result?: Record<string, unknown>; error?: string;
 }
+// A cycle at k=1 measured 35 minutes on 2026-10-22; two hours leaves room for slower models.
+export const MAX_WALL_MS = 7_200_000
 type Job = { abort: AbortController; promise: Promise<void>; record: RunRecord }
 const jobs = new Map<string, Job>()
 const admissions = new Set<string>()
@@ -30,7 +32,7 @@ export class Controller {
     limits = { sessions: 12, wallMs: 1_800_000 },
   ) {
     if (!Number.isInteger(limits.sessions) || limits.sessions < 1 || limits.sessions > 64
-      || !Number.isInteger(limits.wallMs) || limits.wallMs < 1 || limits.wallMs > 3_600_000) throw new Error("Invalid run limits.")
+      || !Number.isInteger(limits.wallMs) || limits.wallMs < 1 || limits.wallMs > MAX_WALL_MS) throw new Error("Invalid run limits.")
     this.api = api; this.memory = memory; this.repository = repository; this.python = python; this.limits = limits
   }
 
