@@ -87,6 +87,8 @@ runs them in the workspace copy of the chosen run and of each baseline run, keep
 `oracle/` in each execution, and reports `n_passed` of `n_criteria` in `result.oracle`. The checks never
 feed selection. They run the project's own commands with the user's permissions, outside any sandbox.
 Without the file the run reports `"oracle": "not_measured"`.
+When the file names an `integratedRef`, such as `refs/remotes/origin/main`, the snapshot refuses any
+`HEAD` other than that commit, so a cycle runs only on integrated work. The controller does not fetch.
 The chosen harness is also written to `<run>/adopted-harness/`, ready to replace the checkout's `harness2/`.
 - Do not rewrite mandatory instructions or expand permissions.
 - Keep private experience out of public source control.

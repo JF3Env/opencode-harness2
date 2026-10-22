@@ -105,6 +105,27 @@ class ControllerTests(unittest.TestCase):
             self.assertEqual((result["n_passed"], result["n_criteria"], result["all_pass"]), (3, 6, False))
             self.assertIn("listed.go", (root / "logs" / "noisy.log").read_text())
 
+    def test_integrated_ref_refuses_any_other_head(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "repo"
+            root.mkdir()
+            run = lambda *args: subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false", "-c", "core.hooksPath=/dev/null",
+                                                "-C", str(root), *args], check=True, capture_output=True)
+            run("init", "-q", "-b", "main")
+            self.write_oracle(root, {"integratedRef": "refs/heads/main", "checks": [{"name": "a", "argv": ["true"]}]})
+            run("add", ".")
+            run("commit", "-q", "-m", "integrated")
+            controller.snapshot(root.resolve(), Path(directory) / "accepted")
+            run("checkout", "-q", "-b", "feature")
+            run("commit", "-q", "--allow-empty", "-m", "not integrated")
+            with self.assertRaisesRegex(ValueError, "only on integrated work"):
+                controller.snapshot(root.resolve(), Path(directory) / "refused")
+            self.assertFalse((Path(directory) / "refused").exists())
+            self.write_oracle(root, {"integratedRef": "refs/remotes/origin/main", "checks": [{"name": "a", "argv": ["true"]}]})
+            run("commit", "-q", "-am", "missing ref")
+            with self.assertRaisesRegex(ValueError, "Fetch it first"):
+                controller.snapshot(root.resolve(), Path(directory) / "missing")
+
     def test_upstream_contract_is_available(self):
         from harness2.core.schedule import run_task
         from harness2.core.selection import reflect_adoption

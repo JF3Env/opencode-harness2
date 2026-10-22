@@ -148,12 +148,33 @@ def measure(oracle: dict, workspace: Path, logs: Path) -> dict:
     return {"n_passed": count, "n_criteria": len(results), "all_pass": count == len(results), "checks": results}
 
 
+def require_integrated(repository: Path, revision: str) -> None:
+    """Refuse a revision other than the integratedRef that harness2/oracle.json names at that revision."""
+    try:
+        body = git(repository, "show", f"{revision}:harness2/oracle.json")
+    except subprocess.CalledProcessError:
+        return
+    data = json.loads(body)
+    ref = data.get("integratedRef") if isinstance(data, dict) else None
+    if ref is None:
+        return
+    if not isinstance(ref, str) or not re.fullmatch(r"refs/[A-Za-z0-9._/-]+", ref) or ".." in ref:
+        raise ValueError("integratedRef must be a full ref name such as refs/remotes/origin/main.")
+    try:
+        target = git(repository, "rev-parse", "--verify", "--quiet", f"{ref}^{{commit}}").decode().strip()
+    except subprocess.CalledProcessError as exc:
+        raise ValueError(f"The project requires {ref}, which does not exist here. Fetch it first.") from exc
+    if target != revision:
+        raise ValueError(f"HEAD {revision[:12]} is not {ref} ({target[:12]}). This project runs a cycle only on integrated work.")
+
+
 def snapshot(repository: Path, destination: Path) -> str:
     if git(repository, "rev-parse", "--show-toplevel").decode().strip() != str(repository):
         raise ValueError("The source must be the canonical repository root.")
     if git(repository, "status", "--porcelain", "--untracked-files=all").strip():
         raise ValueError("The repository is not clean. Commit or preserve user work before starting a run.")
     revision = git(repository, "rev-parse", "HEAD").decode().strip()
+    require_integrated(repository, revision)
     for row in git(repository, "ls-tree", "-rz", "--full-tree", revision).split(b"\0"):
         if not row:
             continue
