@@ -18,6 +18,10 @@ import sys
 import tarfile
 import threading
 
+# A snapshot is copied into every workspace, so a run of 12 sessions holds up to 12 copies on disk.
+SNAPSHOT_LIMIT = 64_000_000
+FILE_LIMIT = 2_000_000
+
 
 def git(repository: Path, *args: str) -> bytes:
     return subprocess.check_output(
@@ -44,12 +48,12 @@ def files(root: Path) -> dict[str, bytes]:
         if path.is_symlink():
             raise ValueError("A candidate contains a symbolic link.")
         if path.is_file():
-            if path.stat().st_size > 2_000_000:
+            if path.stat().st_size > FILE_LIMIT:
                 raise ValueError("A candidate file exceeds 2 MB.")
             body = path.read_bytes()
             total += len(body)
-            if total > 20_000_000:
-                raise ValueError("The project snapshot exceeds 20 MB.")
+            if total > SNAPSHOT_LIMIT:
+                raise ValueError("The project snapshot exceeds 64 MB.")
             result[path.relative_to(root).as_posix()] = body
     return result
 
@@ -196,6 +200,12 @@ def require_integrated(repository: Path, revision: str) -> None:
         raise ValueError(f"HEAD {revision[:12]} is not {ref} ({target[:12]}). This project runs a cycle only on integrated work.")
 
 
+def bounded(archive: bytes) -> bytes:
+    if len(archive) > SNAPSHOT_LIMIT:
+        raise ValueError("The project archive exceeds 64 MB.")
+    return archive
+
+
 def snapshot(repository: Path, destination: Path) -> str:
     if git(repository, "rev-parse", "--show-toplevel").decode().strip() != str(repository):
         raise ValueError("The source must be the canonical repository root.")
@@ -213,9 +223,7 @@ def snapshot(repository: Path, destination: Path) -> str:
         if any(part.startswith(".env") and not part.endswith(".example") or part.endswith((".pem", ".key", ".p12", ".pfx"))
                or part in (".npmrc", ".netrc") for part in rel.split("/")):
             raise ValueError("The tracked snapshot contains a potential credential file.")
-    archive = git(repository, "archive", "--format=tar", revision)
-    if len(archive) > 25_000_000:
-        raise ValueError("The project archive exceeds 25 MB.")
+    archive = bounded(git(repository, "archive", "--format=tar", revision))
     destination.mkdir()
     with tarfile.open(fileobj=io.BytesIO(archive)) as source:
         source.extractall(destination, filter="data")

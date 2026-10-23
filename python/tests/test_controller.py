@@ -47,6 +47,28 @@ class ControllerTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 controller.files(root)
 
+    def test_snapshot_limit_admits_64_mb_and_refuses_one_byte_more(self):
+        self.assertEqual(len(controller.bounded(bytes(64_000_000))), 64_000_000)
+        with self.assertRaisesRegex(ValueError, "archive exceeds 64 MB"):
+            controller.bounded(bytes(64_000_001))
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for index in range(32):
+                (root / f"part{index:02}").write_bytes(bytes(2_000_000))
+            self.assertEqual(sum(map(len, controller.files(root).values())), 64_000_000)
+            (root / "one-more").write_bytes(b"x")
+            with self.assertRaisesRegex(ValueError, "snapshot exceeds 64 MB"):
+                controller.files(root)
+
+    def test_file_limit_admits_2_mb_and_refuses_one_byte_more(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "at-limit").write_bytes(bytes(2_000_000))
+            self.assertEqual(len(controller.files(root)["at-limit"]), 2_000_000)
+            (root / "over-limit").write_bytes(bytes(2_000_001))
+            with self.assertRaisesRegex(ValueError, "file exceeds 2 MB"):
+                controller.files(root)
+
     def test_project_harness_replaces_the_one_line_seed(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

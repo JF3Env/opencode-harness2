@@ -98,6 +98,9 @@ feed selection. They run the project's own commands with the user's permissions,
 Without the file the run reports `"oracle": "not_measured"`.
 When the file names an `integratedRef`, such as `refs/remotes/origin/main`, the snapshot refuses any
 `HEAD` other than that commit, so a cycle runs only on integrated work. The controller does not fetch.
+The snapshot is `git archive` of that commit. It refuses an archive or an extracted tree over 64 MB and
+any file over 2 MB; export-ignore what no worker needs. Each workspace holds its own copy, so a run of
+12 sessions can use about 12 times the snapshot on disk.
 The chosen harness is also written to `<run>/adopted-harness/`, ready to replace the checkout's `harness2/`.
 - Do not rewrite mandatory instructions or expand permissions.
 - Keep private experience out of public source control.
